@@ -1,0 +1,5 @@
+/home/artur1214/rustProjects/console_torrent/bencoding/target/debug/build/quote-9ce86f9c68082bc1/build_script_build-9ce86f9c68082bc1: /home/artur1214/.cargo/registry/src/github.com-1ecc6299db9ec823/quote-1.0.29/build.rs
+
+/home/artur1214/rustProjects/console_torrent/bencoding/target/debug/build/quote-9ce86f9c68082bc1/build_script_build-9ce86f9c68082bc1.d: /home/artur1214/.cargo/registry/src/github.com-1ecc6299db9ec823/quote-1.0.29/build.rs
+
+/home/artur1214/.cargo/registry/src/github.com-1ecc6299db9ec823/quote-1.0.29/build.rs:
