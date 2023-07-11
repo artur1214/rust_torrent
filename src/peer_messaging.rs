@@ -1,6 +1,7 @@
-use std::{error::Error, net::SocketAddr};
+use std::{error::Error, net::SocketAddr, mem};
 
 use derive_builder::Builder;
+use num_enum::TryFromPrimitive;
 use tokio::net::{lookup_host, UdpSocket};
 
 #[derive(Debug)]
@@ -10,8 +11,9 @@ enum AnnounceType {
 }
 
 
+
+#[derive(Clone, TryFromPrimitive)]
 #[repr(u32)]
-#[derive(Clone)]
 enum AnnounceEventType {
     UNDEFINED,
     COMPLETED,
@@ -36,7 +38,73 @@ struct IpV4AnnounceRequest {
     key: u32,
     num_want: u32,
     port: u16
-    
+}
+impl IpV4AnnounceRequest {
+    fn to_bytes(&self) -> [u8; 98] {
+        return [..self];
+    }
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() <  104 {
+            return None;
+        }
+
+        Some(Self {
+            connection_id: u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+            action: u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
+            transaction_id: u32::from_be_bytes(bytes[12..16].try_into().unwrap()),
+            info_hash: bytes[16..36].try_into().unwrap(),
+            peer_id: bytes[36..56].try_into().unwrap(),
+            downloaded: u64::from_be_bytes(bytes[56..64].try_into().unwrap()),
+            left: u64::from_be_bytes(bytes[64..72].try_into().unwrap()),
+            uploaded: u64::from_be_bytes(bytes[72..80].try_into().unwrap()),
+            event: AnnounceEventType::try_from(u32::from_be_bytes(bytes[80..84].try_into().unwrap())).unwrap(),
+            ip_address: u32::from_be_bytes(bytes[84..88].try_into().unwrap()),
+            key: u32::from_be_bytes(bytes[88..92].try_into().unwrap()),
+            num_want: u32::from_be_bytes(bytes[92..96].try_into().unwrap()),
+            port: u16::from_be_bytes(bytes[96..98].try_into().unwrap()),
+        })
+    }
+}
+
+impl IpV4AnnounceResponse {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 20 {
+            return None;
+        }
+        let action = u32::from_be_bytes(bytes[0..4].try_into().unwrap());
+        let transaction_id = u32::from_be_bytes(bytes[4..8].try_into().unwrap());
+        let interval = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
+        let leechers = u32::from_be_bytes(bytes[12..16].try_into().unwrap());
+        let seeders = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+        let mut addresses = Vec::new();
+        if bytes.len() >= 26 {
+            let address_bytes = &bytes[20..];
+            if address_bytes.len() % 6 == 0 {
+                for i in (0..address_bytes.len()).step_by(6) {
+                    let ip = u32::from_be_bytes(//[
+                        address_bytes[i..i+4].try_into().unwrap()
+                        // address_bytes[i + 1],
+                        // address_bytes[i + 2],
+                        // address_bytes[i + 3],]
+                    );
+                    let port = u16::from_be_bytes([address_bytes[i + 4], address_bytes[i + 5]]);
+                    addresses.push(IpV4AnnounceAddress { ip, port });
+                }
+            }
+            else{
+                return None;
+            }
+        }
+
+        Some(IpV4AnnounceResponse {
+            action,
+            transaction_id,
+            interval,
+            leechers,
+            seeders,
+            addresses,
+        })
+    }
 }
 
 #[repr(C)]
@@ -184,6 +252,12 @@ async fn test_announce() {
     announcer.get_connection_id().await;
 
     print!("{:?}", announcer);
+}
+
+#[tokio::test]
+async fn test_struct_size() {
+    let size = mem::size_of::<IpV4AnnounceRequest>();
+    println!("Размер структуры: {} байт", size);
 }
 
 #[tokio::test]
