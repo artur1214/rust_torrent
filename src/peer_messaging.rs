@@ -22,6 +22,7 @@ enum AnnounceEventType {
 }
 
 //TODO: Maybe rewrite with tuple struct??
+//#[repr(packed)] //Maybe enable? GOOD: Easy memcopy BAD: may cause indian problems, may cause crush at ARM arch. 
 #[repr(C)]
 #[derive(Builder) ]
 struct IpV4AnnounceRequest {
@@ -41,7 +42,7 @@ struct IpV4AnnounceRequest {
 }
 impl IpV4AnnounceRequest {
     fn to_bytes(&self) -> [u8; 98] {
-        return [..self];
+        return [0;98];
     }
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() <  104 {
