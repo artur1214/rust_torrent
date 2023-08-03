@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::iter::zip;
+use std::str::FromStr;
 use serde;
 use serde::{Serialize, ser::{SerializeMap}};
 use serde_json::{json, Value};
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
 mod read_torrent_data;
 
@@ -15,6 +17,60 @@ pub enum Bencode {
     List(Vec<Bencode>),
     Dictionary(Vec<(Bencode, Bencode)>),
     Bytes(Vec<u8>)
+}
+
+impl Bencode {
+    fn to_bencode_bytes(&self) -> Vec<u8> {
+        let mut collector: Vec<u8> = Vec::new();
+        match self {
+            Bencode::String(value) => {
+                collector.extend((value.chars().count().to_string() + ":" + value).as_bytes());
+                //old_collector.push_str((value.chars().count().to_string() + ":" + value).as_str());
+                //return old_collector;
+            },
+            Bencode::Integer(value) => {
+                collector.push(b'i');
+                collector.extend(value.to_string().as_bytes());
+                collector.push(b'e');
+
+                // old_collector.push_str("i");
+                // old_collector.push_str(value.to_string().as_str());
+                // old_collector.push('e');
+                //return old_collector;
+            },
+            Bencode::List(values) => {
+                collector.push(b'l');
+                for value in values {
+                    collector.extend(value.to_bencode_bytes());
+                }
+                collector.push(b'e');
+            },
+            Bencode::Dictionary(values) => {
+                collector.push(b'd');
+                //let mut values: Vec<(Bencode, Bencode)> = Vec::new();
+                //values.extend_from_slice(&old_values); 
+                //values.sort_by(|a,b|a.0.to_string().cmp(&b.0.to_string()));
+               
+                // TODO: BITTORRENT SPECS SAYS, THAT DICTS MUST BE SORTED LEXICOGRAPHICAL. THEORETICALLY, ALL OF TORRENT FILES MUST BE ALREADY SORTED, 
+                //BUT IN FACT, HERE MUST BE ADDED SORTING. PROBLEM IS VALUES ARE IMMUTABLE AND UNCLONABLE
+                for (key, value) in values {
+                    collector.extend(key.to_bencode_bytes());
+                    collector.extend(value.to_bencode_bytes());
+                }
+                collector.push(b'e')
+            },
+            Bencode::Bytes(value) => {
+                collector.extend(value.len().to_string().as_bytes());
+                collector.push(b':');
+                collector.extend(value);
+                //return old_collector;
+            },
+        }
+        return collector;
+    }
+    fn try_get_info_hash(&self) {
+
+    }
 }
 
 
@@ -193,6 +249,29 @@ async fn test_decode_from_file_and_write_json() {
         let json_string = serde_json::to_string_pretty(&json_data).expect("Ошибка сериализации в JSON");
         file.write_all(json_string.as_bytes()).await.expect("Ошибка записи в файл");
 
+    } else {
+        println!("Error decoding Bencode");
+        assert!(false);
+    }
+}
+
+#[tokio::test]
+async fn test_decode_from_file_and_encode_again() {
+    if let Some(decoded) = read_torrent_from_file("test2.torrent").await.ok() {
+        let encoded_data = decoded.to_bencode_bytes();
+    
+        let file_path = "data2_encoded.torrent";
+        let mut file = File::create(file_path).await.expect("Не удалось создать файл");
+        
+        file.write_all(&encoded_data).await.expect("Ошибка записи в файл");
+        let mut container = vec![];
+        File::open("test2.torrent").await.unwrap().read_to_end(&mut container).await.unwrap();
+        let mut i = 0;
+        for (old, new) in zip(container, encoded_data) {
+            println!("{}:{}    {}", old, new, i);
+            assert_eq!(old, new);
+            i+=1;
+        }
     } else {
         println!("Error decoding Bencode");
         assert!(false);
